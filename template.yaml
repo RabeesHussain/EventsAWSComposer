@@ -1,0 +1,280 @@
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  OrderEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: OrderEventBus
+  ApnaTabele:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  Rabees:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.health
+      Targets:
+        - Id: !Ref Hussain
+          Arn: !GetAtt Hussain.Arn
+  Hussain:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Hussain
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs18.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          TABLE_ARN: !GetAtt Table.Arn
+          TABLE_NAME_2: !Ref ApnaTabele
+          TABLE_ARN_2: !GetAtt ApnaTabele.Arn
+          EVENTBUS: !Ref OrderEventBus
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApnaTabele
+        - EventBridgePutEventsPolicy:
+            EventBusName: OrderEventBus
+  HussainLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Hussain}
+  RabeesToHussainPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Hussain.Arn
+      Principal: !Sub events.${AWS::URLSuffix}
+      SourceArn: !GetAtt Rabees.Arn
+  Kali:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Kali
+      CodeUri: src/Function
+      Handler: index.handler
+      Runtime: nodejs18.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          EVENTBUS: !Ref OrderEventBus
+          TABLE_NAME: !Ref ApnaTabele
+          TABLE_ARN: !GetAtt table.Arn
+          TABLE_NAME_2: !Ref table
+          TABLE_ARN_2: !GetAtt table.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ApnaTabele
+  KaliLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Kali}
+  Adeema:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.health
+      Targets:
+        - Id: !Ref Kali
+          Arn: !GetAtt Kali.Arn
+  AdeemaToKaliPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Kali.Arn
+      Principal: !Sub events.${AWS::URLSuffix}
+      SourceArn: !GetAtt Adeema.Arn
+  Simulate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Simulate
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs18.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          EVENTBUS: !Ref OrderEventBus
+      Policies:
+        - EventBridgePutEventsPolicy:
+            EventBusName: OrderEventBus
+  SimulateLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Simulate}
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.health
+      Targets:
+        - Id: !Ref Simulate
+          Arn: !GetAtt Simulate.Arn
+  EventRuleToSimulatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Simulate.Arn
+      Principal: !Sub events.${AWS::URLSuffix}
+      SourceArn: !GetAtt EventRule.Arn
+  Schedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !GetAtt Simulate.Arn
+        RoleArn: !GetAtt ScheduleToSimulateRole.Arn
+  ScheduleToSimulateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service: !Sub scheduler.${AWS::URLSuffix}
+          Action: sts:AssumeRole
+          Condition:
+            ArnLike:
+              aws:SourceArn: !Sub
+                - arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${AWS::StackName}-${ResourceId}-*
+                - ResourceId: Schedule
+      Policies:
+        - PolicyName: StartExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt Simulate.Arn
+  Function2:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Function2
+      CodeUri: src/Function2
+      Handler: index.handler
+      Runtime: nodejs18.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          TABLE_ARN: !GetAtt Table.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+  Function2LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Function2}
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+  EventRule2:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.health
+      Targets:
+        - Id: !Ref Function2
+          Arn: !GetAtt Function2.Arn
+  EventRule2ToFunction2Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt Function2.Arn
+      Principal: !Sub events.${AWS::URLSuffix}
+      SourceArn: !GetAtt EventRule2.Arn
+  Frontend:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: Frontend
+      CodeUri: src/Function3
+      Handler: index.handler
+      Runtime: nodejs18.x
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref Table
+          TABLE_ARN: !GetAtt Table.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+      FunctionUrlConfig:
+        AuthType: NONE
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Frontend}
+Metadata:
+  AWS::Composer::Groups:
+    Group:
+      Label: Group
+      Members:
+        - Hussain
+        - Kali
+        - ApnaTabele
+        - Rabees
+        - Adeema
+    Group2:
+      Label: Group2
+      Members:
+        - Simulate
+        - EventRule
+        - Schedule
+    Group3:
+      Label: Group3
+      Members:
+        - Function2
+        - Table
+        - EventRule2
+        - Frontend
